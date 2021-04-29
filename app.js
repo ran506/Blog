@@ -7,6 +7,9 @@ const session = require("express-session");
 const passport = require("passport");
 //passportlocalMongoose require passport-local dependency while don't have to be explictly require here
 const passportLocalMongoose=require("passport-local-mongoose");
+//use it as a passport strategy
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const findOrCreate=require('mongoose-findorcreate');
 const app = express();
 // const md5 = require("md5");
 mongoose.connect("mongodb+srv://ran:050627@ran.agxxa.mongodb.net/blogDB?retryWrites=true&w=majority", {useNewUrlParser:true});
@@ -37,19 +40,46 @@ const postSchema = {
 const Post = mongoose.model("Post",postSchema);
 const userSchema  =new mongoose.Schema ( {
     email: String,
-    password: String
+    password: String,
+    googleId: String
 });
 userSchema.plugin(passportLocalMongoose);
-
+userSchema.plugin(findOrCreate);
 //only password feild , mongoose will encrypt when you save, decrypt when you find
 //userSchema.plugin(encrypt, { secret: process.env.secret, encryptedFields:['password'] });
 //remove this plugin to try md5
 const User = mongoose.model("User", userSchema);
 passport.use(User.createStrategy());
 //serialize create cookie,
-passport.serializeUser(User.serializeUser());
-//use pas
-passport.deserializeUser(User.deserializeUser());
+// passport.serializeUser(User.serializeUser());
+// passport.deserializeUser(User.deserializeUser());
+//replace the above serialize(passport-local) by passport which support more strategy
+passport.serializeUser(function(user, done) {
+    done(null, user.id);
+  });
+  
+  passport.deserializeUser(function(id, done) {
+    User.findById(id, function(err, user) {
+      done(err, user);
+    });
+  });
+// userProfileURL google api deprecated, fetch userinfo through another endpoint
+passport.use(new GoogleStrategy({
+    clientID:     process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL :"https://www.googleleapis.com/oauth2/v3/userinfo"
+  },
+  function(request, accessToken, refreshToken, profile, done) {
+      //not a mongoose function(findOrCreete, pseudo code you need to implement)
+      // here I use Mongoose findOrCreate Plugin
+    console.log(profile);
+    //the User model should have a googleId field
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return done(err, user);
+    });
+  }
+));
 // const admin = new User({
 //     email:"384961093@qq.com",
 //     password: "1234"
@@ -65,6 +95,18 @@ app.get("/",function(req,res) {
         });
     })
 });
+app.get("/auth/google",(req,res) =>{
+    // specify the scope info we want, eg profile will provide email
+    // will redirect to authorize redirect URL
+    passport.authenticate("google", {scope: ["profile"]});
+});
+//redirect back to our website
+app.get( '/auth/google/secrets',
+    passport.authenticate( 'google', {failureRedirect: '/login'}),
+    function(req,res ) {
+        //successful authetication, redirect home
+        res.redirect("/secrets"); // will go to get secrets page wthich will check if user is authenticate
+    });
 app.get("/about",function(req,res) {
     res.render("about",{Content:aboutContent});
 });
@@ -190,6 +232,7 @@ app.post("/login",(req,res) => {
         if(err) {
             console.log(err);
         }else {
+            //authenticate(the strategy you wanna use, eg local or google facebook)
             passport.authenticate("local") (req,res,function() {
                 res.redirect("/secrets");
             });
