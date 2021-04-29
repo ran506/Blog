@@ -41,7 +41,8 @@ const Post = mongoose.model("Post",postSchema);
 const userSchema  =new mongoose.Schema ( {
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret: String
 });
 userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
@@ -201,16 +202,29 @@ app.get("/register",(req,res) =>{
 //     });
 // });
 //check session if user is log in
+// comment out this since secreate  page is now not priviliged, anyone can see it
+// app.get("/secrets",(req,res)=> {
+//     if (req.isAuthenticated() ){
+//         res.render("secrets");
+//     }
+//     else {
+//         res.redirect("/login");
+//     }
+// });
 app.get("/secrets",(req,res)=> {
-    if (req.isAuthenticated() ){
-        res.render("secrets");
-    }
-    else {
-        res.redirect("/login");
-    }
+    //query all the data with field secret not null
+    User.find({"secret": {$ne:null}}, function(err,foundUser){
+        if(err) {
+            console.log(err);
+        }else {
+            if(foundUser) {
+                res.render("secrets", {userWithSecrets:founderUser} );
+            }
+        }
+    });
 });
 app.post("/register",function(req,res) {
-    User.register({username:req.body.username}, req.body.password,function(err,user) {
+    User.register({username:req.body.username}, req.body.password, function(err,user) {
         if(err) {
             console.log(err);
             res.redirect("/register");
@@ -243,6 +257,32 @@ app.get("/logout", (req,res) => {
     //deauthenticate user and log out session
     req.logout();
     res.redirect("/");
+});
+app.get("/submit",(req,res) => {
+    if (req.isAuthenticated()) {
+        res.render("submit");
+    }
+    else {
+        res.redirect("/login");
+    }
+});
+app.post("/submit",(req,res) => {
+    const secret = req.body.secret;
+    //should know who the user is, and add the secret they post to their field
+    //console.log(req.user)
+    User.findById(req.user.id, function (err, foundUser) {
+        if (err) {
+            console.log(err)
+        }
+        else {
+            if (foundUser) {
+                foundUser.secret = secret;
+                foundUser.save(function () {
+                    res.redirect("/secrets");
+                });
+            }
+        }
+    });
 });
 app.listen(3001,()=>{
     console.log("Example app listening at 3001");
