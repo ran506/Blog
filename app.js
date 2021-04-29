@@ -12,7 +12,8 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const findOrCreate=require('mongoose-findorcreate');
 const app = express();
 // const md5 = require("md5");
-mongoose.connect("mongodb+srv://ran:050627@ran.agxxa.mongodb.net/blogDB?retryWrites=true&w=majority", {useNewUrlParser:true});
+process.env.MONGOHQ_URL
+mongoose.connect(process.env.MONGOHQ_URL, {useNewUrlParser:true});
 mongoose.set("useCreateIndex",true);
 app.use(session({
     secret: 'keyboard cat',
